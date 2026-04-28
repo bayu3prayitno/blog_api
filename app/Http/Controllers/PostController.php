@@ -7,6 +7,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Resources\PostResource;
+use Spatie\QueryBuilder\QueryBuilder;
+use Spatie\QueryBuilder\AllowedFilter;
+use App\Helpers\ApiResponseHelper;
 
 class PostController extends Controller
 {
@@ -18,8 +21,17 @@ class PostController extends Controller
     {
         $page = $request->input('page', 1);
 
-        $paginatedData = Cache::remember("posts.page.{$page}", 120, function () {
-            $posts = Post::paginate(10);
+        $cacheKey = 'posts.page.' . $page . '.' . md5($request->fullUrl());
+
+        $paginatedData = Cache::tags(['posts'])->remember($cacheKey, 120, function () {
+            $posts = QueryBuilder::for(Post::class)
+                ->allowedFilters([
+                    AllowedFilter::partial('title'),
+                    AllowedFilter::partial('content'),
+                ])
+                ->allowedSorts(['title', 'created_at'])
+                ->paginate(10);
+
             return [
                 'data' => PostResource::collection($posts)->resolve(),
                 'meta' => [
@@ -30,7 +42,7 @@ class PostController extends Controller
             ];
         });
 
-        return response()->json($paginatedData);
+        return ApiResponseHelper::success($paginatedData, 'Data Posts Berhasil Diambil');
     }
 
     /**
@@ -49,12 +61,14 @@ class PostController extends Controller
 
         $post = Post::create($validatedData);
 
+        Cache::tags(['posts'])->flush();
+
         return response()->json($post, 201);
     }
 
     public function show(string $id)
     {
-        $post = Cache::remember("posts.{$id}", 120, function () use ($id) {
+        $post = Cache::tags(['posts'])->remember("posts.{$id}", 120, function () use ($id) {
             $data = Post::find($id);
             return $data ? (new PostResource($data))->resolve() : null;
         });
@@ -82,8 +96,8 @@ class PostController extends Controller
 
         $post->update($request->all());
 
-        Cache::forget('posts.all');
-        Cache::forget("posts.{$id}");
+        // clear posts cache so listing/show return fresh data
+        Cache::tags(['posts'])->flush();
 
         return response()->json($post);
     }
@@ -100,9 +114,7 @@ class PostController extends Controller
         }
 
         $post->delete();
-
-        Cache::forget("posts.{$id}");
-        Cache::forget("posts.page.1");
+        Cache::tags(['posts'])->flush();
 
         return response()->json([
             'id' => $id,

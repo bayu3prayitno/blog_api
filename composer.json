@@ -12,10 +12,12 @@
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
         "predis/predis": "^3.4",
+        "spatie/laravel-query-builder": "^6.4",
         "spiral/roadrunner-cli": "^2.6.0",
         "spiral/roadrunner-http": "^3.3.0"
     },
     "require-dev": {
+        "barryvdh/laravel-debugbar": "^4.2",
         "fakerphp/faker": "^1.23",
         "laravel/pail": "^1.2.2",
         "laravel/pint": "^1.24",

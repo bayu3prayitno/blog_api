@@ -12,20 +12,21 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('posts', function (Blueprint $table) {
-        $table->integer('id')->autoIncrement();
-        $table->string('title', 100);
-        $table->enum('status', ['draft', 'published'])->default('draft');
-        $table->text('content');
-        $table->integer('user_id');
+            $table->integer('id')->autoIncrement();
+            $table->string('title', 100);
+            $table->enum('status', ['draft', 'published'])->default('draft');
+            $table->text('content');
+            $table->integer('user_id');
 
-        $table->foreign('user_id')
-              ->references('id')
-              ->on('users')
-              ->onDelete('restrict')
-              ->onUpdate('restrict');
+            $table->foreign('user_id')
+                ->references('id')
+                ->on('users')
+                ->onDelete('restrict')
+                ->onUpdate('restrict');
 
-        $table->engine = 'InnoDB';
-    });
+            $table->engine = 'InnoDB';
+            $table->timestamps();
+        });
     }
 
     /**
