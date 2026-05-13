@@ -7,14 +7,17 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "intervention/image": "^3.11",
         "laravel/framework": "^12.0",
         "laravel/octane": "^2.15",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
         "predis/predis": "^3.4",
+        "spatie/laravel-fractal": "^6.4",
         "spatie/laravel-query-builder": "^6.4",
         "spiral/roadrunner-cli": "^2.6.0",
-        "spiral/roadrunner-http": "^3.3.0"
+        "spiral/roadrunner-http": "^3.3.0",
+        "tymon/jwt-auth": "^2.3"
     },
     "require-dev": {
         "barryvdh/laravel-debugbar": "^4.2",

@@ -4,19 +4,26 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PostController;
 use App\Http\Controllers\CommentController;
+use App\Http\Middleware\RequireAuth;
 
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/register', [AuthController::class, 'register']);
-
-Route::middleware('throttle:5,1')->group(function () {
-    Route::get('/posts', [PostController::class, 'index'])->name('posts.index');
-    Route::get('/posts/{post}', [PostController::class, 'show'])->name('posts.show');
-    Route::get('/comments', [CommentController::class, 'index'])->name('comments.index');
-    Route::get('/comments/{comment}', [CommentController::class, 'show'])->name('comments.show');
-});
-Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/logout', [AuthController::class, 'logout']);
+Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
+    // Zona Publik
+    Route::post('/login', [AuthController::class, 'login']);
+    Route::get('/posts',           [PostController::class,    'index']); 
+    Route::get('/posts/{post}',    [PostController::class,    'show']); 
+    Route::get('/comments',        [CommentController::class, 'index']); 
+    Route::get('/comments/{comment}', [CommentController::class, 'show']);
     
-    Route::apiResource('posts', PostController::class)->except(['index', 'show']);
-    Route::apiResource('comments', CommentController::class)->except(['index', 'show']);
+    // Zona Privat (Wajib Bearer Token)
+    Route::middleware(RequireAuth::class)->group(function () {
+        Route::post('/logout', [AuthController::class, 'logout']);
+
+        Route::post('/posts',          [PostController::class, 'store']);
+        Route::patch('/posts/{post}',  [PostController::class, 'update']);
+        Route::delete('/posts/{post}', [PostController::class, 'destroy']);
+
+        Route::post('/comments',             [CommentController::class, 'store']);
+        Route::patch('/comments/{comment}',  [CommentController::class, 'update']);
+        Route::delete('/comments/{comment}', [CommentController::class, 'destroy']);
+    });
 });

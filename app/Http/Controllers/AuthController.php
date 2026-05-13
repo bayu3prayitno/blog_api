@@ -6,10 +6,13 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Cache;
+use Tymon\JWTAuth\Facades\JWTAuth;
+use Tymon\JWTAuth\Exceptions\JWTException;
 
 class AuthController extends Controller
 {
 
+    //register
     public function register(Request $request)
     {
         $validated = $request->validate([
@@ -33,6 +36,7 @@ class AuthController extends Controller
         ], 201);
     }
 
+    // login
     public function login(Request $request)
     {
         $request->validate([
@@ -40,29 +44,66 @@ class AuthController extends Controller
             'password' => 'required'
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $credentials = $request->only('email', 'password');
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            return response()->json(['message' => 'Kredensial tidak valid'], 401);
+        try {
+            if (!$token = JWTAuth::attempt($credentials)) {
+                return response()->json([
+                    'error' => 'Unauthorized',
+                    'message' => 'Email atau password Anda salah.'
+                ], 401);
+            }
+        } catch (JWTException $e) {
+            return response()->json([
+                'error' => 'Could not create token',
+                'message' => 'Terjadi kesalahan pada server.'
+            ], 500);
         }
-
-        $token = $user->createToken('API Token')->plainTextToken;
 
         return response()->json([
+            'status'  => 'success',
             'message' => 'Login berhasil',
-            'token' => $token
-        ]);
+            'data'    => [
+                'token'      => $token,
+                'token_type' => 'bearer',
+                'expires_in' => config('jwt.ttl') * 60,
+                'user_id'    => JWTAuth::user()->id
+            ]
+        ], 200);
     }
 
+
+    // logout
     public function logout(Request $request)
     {
-        if ($request->user()) {
-            $token = $request->bearerToken();
-            Cache::put('bl_' . $token, true, now()->addMinutes(config('sanctum.expiration', 1440)));
+        $token = $request->bearerToken();
 
-            $request->user()->currentAccessToken()->delete();
+        if ($token) {
+            try {
+                // 1. Ambil durasi masa aktif token dari konfigurasi
+                $ttlMinutes = (int) config('jwt.ttl', 1440);
+
+                // 2. Simpan ke Cache (Redis) untuk pengecekan manual di Middleware RequireAuth
+                Cache::put('bl_' . $token, true, now()->addMinutes($ttlMinutes));
+
+                // 3. Invalidate token secara internal di library JWT
+                JWTAuth::invalidate(JWTAuth::getToken());
+
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => 'Logout berhasil. Token telah masuk daftar hitam (Blacklisted).'
+                ], 200);
+            } catch (JWTException $e) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'Gagal memproses logout, token mungkin sudah tidak valid.'
+                ], 500);
+            }
         }
 
-        return response()->json(['message' => 'Logout berhasil. Token masuk blacklist.']);
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'Token tidak ditemukan dalam permintaan.'
+        ], 400);
     }
 }

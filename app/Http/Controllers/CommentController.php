@@ -3,30 +3,35 @@
 namespace App\Http\Controllers;
 
 use App\Models\Comment;
+use App\Transformers\CommentTransformer;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
-use App\Http\Resources\CommentResource;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 
 class CommentController extends Controller
 {
     /**
      * Mengambil daftar seluruh komentar.
-     * Menggunakan Redis untuk caching selama 120 detik.
      */
     public function index(Request $request)
     {
         $page = $request->input('page', 1);
-        $cacheKey = "comments.page.{$page}";
 
-        $paginatedData = Cache::remember($cacheKey, 120, function () {
+        $paginatedData = Cache::tags(['comments'])->remember("comments.page.{$page}", 120, function () {
             $comments = Comment::paginate(10);
 
+            // Fractal: transformasi collection dengan metadata paginasi
+            $transformed = fractal()
+                ->collection($comments, new CommentTransformer())
+                ->serializeWith(new \League\Fractal\Serializer\ArraySerializer())
+                ->toArray();
+
             return [
-                'data' => CommentResource::collection($comments)->resolve(),
+                'data' => $transformed['data'],
                 'meta' => [
                     'total_records' => $comments->total(),
                     'current_page'  => $comments->currentPage(),
+                    'last_page'     => $comments->lastPage(),
                 ]
             ];
         });
@@ -39,19 +44,31 @@ class CommentController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
+        $validatedData = $request->validate([
             'comment' => 'required|max:250',
-            'post_id' => 'required|exists:posts,id',
+            'post_id' => 'required|integer|exists:posts,id',
+        ], [
+            'comment.required' => 'Teks komentar wajib diisi.',
+            'comment.max'      => 'Komentar tidak boleh lebih dari 250 karakter.',
+            'post_id.required' => 'ID Artikel tujuan wajib disertakan.',
+            'post_id.exists'   => 'Artikel dengan ID tersebut tidak ditemukan.',
         ]);
 
-        $validated['user_id'] = Auth::id();
-        $comment = Comment::create($validated);
+        $validatedData['user_id'] = Auth::id();
+        $comment = Comment::create($validatedData);
 
-        Cache::flush(); 
+        Cache::forget("comments.{$comment->id}");
+        Cache::tags(['comments'])->flush();
+
+        // Fractal: transformasi output create untuk konsistensi
+        $transformed = fractal()
+            ->item($comment, new CommentTransformer())
+            ->serializeWith(new \League\Fractal\Serializer\ArraySerializer())
+            ->toArray();
 
         return response()->json([
-            'message' => 'Komentar berhasil ditambahkan',
-            'data'    => new CommentResource($comment)
+            'message' => 'Komentar berhasil dibuat',
+            'data'    => $transformed
         ], 201);
     }
 
@@ -61,14 +78,25 @@ class CommentController extends Controller
     public function show(string $id)
     {
         $comment = Cache::remember("comments.{$id}", 120, function () use ($id) {
-            return Comment::find($id);
+            $data = Comment::find($id);
+
+            // Fractal: transformasi single item
+            return $data
+                ? fractal()
+                    ->item($data, new CommentTransformer())
+                    ->serializeWith(new \League\Fractal\Serializer\ArraySerializer())
+                    ->toArray()
+                : null;
         });
 
         if (!$comment) {
-            return response()->json(['message' => 'Comment not found'], 404);
+            return response()->json([
+                'message' => 'Komentar tidak ditemukan.',
+                'error'   => 'Not Found'
+            ], 404);
         }
 
-        return response()->json($comment);
+        return response()->json(['data' => $comment]);
     }
 
     /**
@@ -79,17 +107,41 @@ class CommentController extends Controller
         $comment = Comment::find($id);
 
         if (!$comment) {
-            return response()->json(['message' => 'Comment not found'], 404);
+            return response()->json([
+                'message' => 'Gagal memperbarui. Komentar tidak ditemukan.',
+                'error'   => 'Not Found'
+            ], 404);
         }
 
-        // Memperbarui atribut yang dikirimkan klien
-        $comment->update($request->all());
+        if ($comment->user_id !== Auth::id()) {
+            return response()->json([
+                'message' => 'Anda tidak memiliki izin untuk memperbarui komentar ini.',
+                'error'   => 'Unauthorized'
+            ], 403);
+        }
 
-        // Hapus cache global dan cache spesifik item ini
-        Cache::forget('comments.all');
+        $validatedData = $request->validate([
+            'comment' => 'required|max:250',
+        ], [
+            'comment.required' => 'Teks komentar tidak boleh kosong.',
+            'comment.max'      => 'Komentar maksimal 250 karakter.',
+        ]);
+
+        $comment->update($validatedData);
+
         Cache::forget("comments.{$id}");
+        Cache::tags(['comments'])->flush();
 
-        return response()->json($comment);
+        // Fractal: transformasi output update
+        $transformed = fractal()
+            ->item($comment, new CommentTransformer())
+            ->serializeWith(new \League\Fractal\Serializer\ArraySerializer())
+            ->toArray();
+
+        return response()->json([
+            'message' => 'Komentar berhasil diperbarui.',
+            'data'    => $transformed
+        ]);
     }
 
     /**
@@ -100,17 +152,28 @@ class CommentController extends Controller
         $comment = Comment::find($id);
 
         if (!$comment) {
-            return response()->json(['message' => 'Comment not found'], 404);
+            return response()->json([
+                'message' => 'Gagal menghapus. Komentar tidak ditemukan.',
+                'error'   => 'Not Found'
+            ], 404);
+        }
+
+        if ($comment->user_id !== Auth::id()) {
+            return response()->json([
+                'message' => 'Anda tidak memiliki izin untuk menghapus komentar ini.',
+                'error'   => 'Unauthorized'
+            ], 403);
         }
 
         $comment->delete();
 
-        Cache::forget('comments.all');
         Cache::forget("comments.{$id}");
+        Cache::tags(['comments'])->flush();
 
         return response()->json([
-            'id' => $id,
-            'deleted' => 'true'
+            'id'      => $id,
+            'deleted' => true,
+            'message' => 'Komentar telah dihapus.'
         ]);
     }
 }
