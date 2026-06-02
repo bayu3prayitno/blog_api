@@ -19,7 +19,7 @@ This file controls the behavior of your AI Agent.
 
 ## 🌐 Language Protocol
 
-1. **Communication**: Use **ENGLISH**.
+1. **Communication**: Use **INDONESIAN (Bahasa Indonesia)**.
 2. **Artifacts**: Write content in **ENGLISH**.
 3. **Code**: Use **ENGLISH** for all variables, functions, and comments.
 

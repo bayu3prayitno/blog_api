@@ -5,8 +5,31 @@ use Illuminate\Support\Facades\Cache;
 use Fruitcake\LaravelDebugbar\Facades\Debugbar;
 
 Route::get('/', function () {
-    Debugbar::info('Berhasil! Composer sudah ter-autoload 😁.');
-    return view('welcome');
+    return redirect('/posts');
+});
+
+Route::get('/login', function () {
+    return view('auth.login');
+})->name('login');
+
+Route::get('/register', function () {
+    return view('auth.register');
+})->name('register');
+
+Route::get('/posts', function () {
+    return view('posts.index');
+});
+
+Route::get('/posts/create', function () {
+    return view('posts.create');
+});
+
+Route::get('/posts/{id}', function ($id) {
+    return view('posts.show', compact('id'));
+});
+
+Route::get('/posts/{id}/edit', function ($id) {
+    return view('posts.edit', compact('id'));
 });
 
 // Route Pengujian Redis
