@@ -52,30 +52,10 @@ class PostController extends Controller
             'title'   => 'required|max:100', 
             'status'  => 'required|in:draft,published',
             'content' => 'required',
-            'image'   => 'nullable|image|mimes:jpeg,png,jpg|max:4096', 
         ]);
 
         // Menggunakan JWT auth untuk mendapatkan ID user yang sedang login [cite: 339]
         $validatedData['user_id'] = Auth::id(); 
-
-        if ($request->hasFile('image')) {
-            $imageFile  = $request->file('image');
-            $filename   = ImageFormatter::formatName($imageFile->getClientOriginalName(), Auth::id());
-            $storagePath = storage_path('app/public/images');
-
-            if (!file_exists($storagePath)) {
-                mkdir($storagePath, 0755, true);
-            }
-
-            try {
-                $manager = new ImageManager(new Driver());
-                // Skalasi gambar ke lebar 800px sesuai standar praktikum [cite: 349]
-                $manager->read($imageFile)->scale(width: 800)->toJpeg(80)->save($storagePath . '/' . $filename);
-                $validatedData['image'] = 'images/' . $filename;
-            } catch (\Exception $e) {
-                return response()->json(['message' => 'Gagal memproses gambar'], 422);
-            }
-        }
 
         $post = Post::create($validatedData);
 
@@ -131,22 +111,7 @@ class PostController extends Controller
             'title'   => 'sometimes|max:100',
             'status'  => 'sometimes|in:draft,published',
             'content' => 'sometimes',
-            'image'   => 'nullable|image|mimes:jpeg,png,jpg|max:4096',
         ]);
-
-        if ($request->hasFile('image')) {
-            // Hapus gambar lama sebelum mengganti [cite: 432]
-            if ($post->image) {
-                $oldPath = storage_path('app/public/' . $post->image);
-                if (file_exists($oldPath)) @unlink($oldPath);
-            }
-
-            $imageFile = $request->file('image');
-            $filename = ImageFormatter::formatName($imageFile->getClientOriginalName(), Auth::id());
-            $manager = new ImageManager(new Driver());
-            $manager->read($imageFile)->scale(width: 800)->toJpeg(80)->save(storage_path('app/public/images/') . $filename);
-            $validatedData['image'] = 'images/' . $filename;
-        }
 
         $post->update($validatedData);
 

@@ -17,7 +17,6 @@ class PostTransformer extends TransformerAbstract
             'title'     => $post->title, 
             'status'    => $post->status,
             'content'   => $post->content,
-            'image_url' => $post->image ? asset('storage/' . $post->image) : null,
             
             'user_id'   => $post->user_id,
         ];
