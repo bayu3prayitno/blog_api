@@ -20,7 +20,13 @@ def get_driver():
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--window-size=1920,1080")
     
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    # Aktifkan pencatatan log konsol browser menggunakan set_capability (kompatibel Selenium 4)
+    options.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+    
+    driver = webdriver.Chrome(
+        service=Service(ChromeDriverManager().install()), 
+        options=options
+    )
     return driver
 
 def test_browse_posts_page(driver):
@@ -56,8 +62,28 @@ def test_register_new_user(driver):
     wait.until(EC.presence_of_element_located((By.ID, "page-title")))
     print("[✔] Registrasi User -> OK")
     
-    # Logout agar tes login seeded user bersih
-    driver.execute_script("handleGlobalLogout();")
+    # Tutup pop-up notifikasi jika muncul agar tidak menghalangi tombol logout
+    print("Mencoba menutup pop-up notifikasi registrasi sukses...")
+    try:
+        toast_close = WebDriverWait(driver, 3).until(
+            EC.element_to_be_clickable((By.XPATH, "//*[@id='toast-container']//button"))
+        )
+        toast_close.click()
+        time.sleep(0.5) # Tunggu transisi fade-out animasi
+        print("[✔] Menutup Pop-up Notifikasi -> OK")
+    except Exception:
+        # Jika pop-up tidak muncul, lewati saja
+        print("Pop-up notifikasi tidak terdeteksi atau sudah hilang.")
+        pass
+    
+    # Logout secara nyata menggunakan tombol UI
+    print("Melakukan logout...")
+    logout_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@title='Logout']")))
+    logout_btn.click()
+    
+    # Tunggu sampai tombol "Masuk" (guest menu) muncul kembali di navbar
+    wait.until(EC.presence_of_element_located((By.XPATH, "//a[contains(text(), 'Masuk')]")))
+    print("[✔] Logout User -> OK")
     time.sleep(1)
 
 def test_login(driver):
@@ -83,24 +109,82 @@ def test_create_post(driver):
     driver.get(f"{BASE_URL}/posts/create")
     
     wait = WebDriverWait(driver, WAIT_TIME)
-    title_input = wait.until(EC.presence_of_element_located((By.ID, "title")))
-    content_input = driver.find_element(By.ID, "content-input")
-    submit_btn = driver.find_element(By.XPATH, "//button[@type='submit']")
+    
+    # Mencari elemen secara spesifik
+    title_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "input#title")))
+    content_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "textarea#content-input")))
+    submit_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']")))
     
     # Buat post dengan judul acak agar unik
     random_id = random.randint(100, 999)
     post_title = f"Artikel Selenium Ke-{random_id}"
     post_content = "Ini adalah konten artikel uji coba otomatis menggunakan Python Selenium."
     
-    print(f"Membuat artikel baru: '{post_title}'...")
-    title_input.send_keys(post_title)
-    content_input.send_keys(post_content)
-    submit_btn.click()
+    print(f"Mengisi formulir artikel baru via JS: '{post_title}'...")
+    
+    # Isi nilai menggunakan JS untuk memastikan keandalan di headless mode
+    driver.execute_script(
+        "arguments[0].value = arguments[1]; "
+        "arguments[0].dispatchEvent(new Event('input', { bubbles: true })); "
+        "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", 
+        title_input, post_title
+    )
+    
+    driver.execute_script(
+        "arguments[0].value = arguments[1]; "
+        "arguments[0].dispatchEvent(new Event('input', { bubbles: true })); "
+        "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", 
+        content_input, post_content
+    )
+    
+    # Debug: Cetak nilai input untuk verifikasi
+    print(f"DEBUG: Nilai input judul terisi = '{title_input.get_attribute('value')}'")
+    print(f"DEBUG: Nilai input isi terisi = '{content_input.get_attribute('value')}'")
+    
+    print("Menekan tombol Terbitkan Artikel...")
+    # Klik submit menggunakan Javascript Click
+    driver.execute_script("arguments[0].click();", submit_btn)
     
     # Verifikasi pengalihan ke list postingan dan artikel baru muncul
     print("Menunggu artikel baru muncul di daftar...")
-    wait.until(EC.presence_of_element_located((By.XPATH, f"//h4[contains(text(), '{post_title}')]")))
-    print("[✔] Pembuatan Artikel -> OK")
+    try:
+        wait.until(EC.presence_of_element_located((By.XPATH, f"//h4[contains(text(), '{post_title}')]")))
+        print("[✔] Pembuatan Artikel -> OK")
+    except Exception as e:
+        print("\n=== DEBUG INFO ===")
+        print(f"URL Saat Ini: {driver.current_url}")
+        
+        # Cek token di localStorage
+        token_exists = driver.execute_script("return localStorage.getItem('jwt_token') !== null;")
+        print(f"Token di LocalStorage terdeteksi: {token_exists}")
+        
+        print("\n--- BROWSER CONSOLE LOGS ---")
+        try:
+            for entry in driver.get_log('browser'):
+                print(entry)
+        except Exception as log_ex:
+            print(f"Gagal mengambil console logs: {log_ex}")
+        print("----------------------------")
+        
+        print("\n--- TEKS HALAMAN (BODY) ---")
+        try:
+            print(driver.find_element(By.TAG_NAME, "body").text)
+        except Exception as body_ex:
+            print(f"Gagal mengambil teks body: {body_ex}")
+        print("---------------------------")
+
+        print("\n--- TOAST CONTAINER HTML ---")
+        try:
+            toast_container = driver.find_element(By.ID, "toast-container")
+            print(toast_container.get_attribute("innerHTML"))
+        except Exception as toast_ex:
+            print(f"Gagal mengambil toast container: {toast_ex}")
+        print("----------------------------")
+
+        print("\nIsi HTML Halaman Lengkap (sebagian):")
+        print(driver.page_source[:5000])
+        print("==================\n")
+        raise e
 
 def main():
     driver = None
