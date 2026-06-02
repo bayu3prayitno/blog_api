@@ -22,7 +22,7 @@
                 <input type="password" id="password" required class="w-full bg-slate-900 border border-darkBorder focus:border-cyan-500 rounded-xl px-4 py-3 text-slate-200 placeholder-slate-600 focus:outline-none transition-colors duration-200" placeholder="••••••••">
             </div>
             
-            <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-bold tracking-wide rounded-xl shadow-lg shadow-indigo-600/10 hover:shadow-indigo-500/20 transform hover:-translate-y-0.5 transition-all duration-200">Masuk Sekarang</button>
+            <button type="submit" id="btn-login" class="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-bold tracking-wide rounded-xl shadow-lg shadow-indigo-600/10 hover:shadow-indigo-500/20 transform hover:-translate-y-0.5 transition-all duration-200">Masuk Sekarang</button>
         </form>
         
         <div class="text-center mt-6">
