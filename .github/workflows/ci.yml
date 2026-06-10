@@ -2,92 +2,82 @@ name: Laravel & Python Selenium CI
 
 on:
   push:
-    branches: [ "main", "master", "dev" ]
+    branches: ["main", "master", "dev"]
   pull_request:
-    branches: [ "main", "master", "dev" ]
+    branches: ["main", "master", "dev"]
 
 jobs:
   laravel-ci:
     runs-on: ubuntu-latest
 
-    services:
-      # Optional: if you need Redis for Octane, configure it here.
-      # Since we are using standard PHP Server & File driver for testing, we don't need a Redis service.
-
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    # 1. Setup PHP with required extensions
-    - name: Setup PHP
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: '8.2'
-        extensions: mbstring, dom, curl, libxml, zip, sqlite, pdo_sqlite
-        coverage: none
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, dom, curl, libxml, zip, sqlite, pdo_sqlite
+          coverage: none
 
-    - name: Copy env.testing
-      run: cp .env.testing .env
+      - name: Copy env.testing
+        run: cp .env.testing .env
 
-    - name: Install Composer Dependencies
-      run: composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+      - name: Install Composer Dependencies
+        run: composer install --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
 
-    - name: Generate Application Key
-      run: php artisan key:generate --env=testing
+      - name: Generate Application Key
+        run: php artisan key:generate --env=testing
 
-    # 2. Setup Node.js and build frontend assets
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
 
-    - name: Install NPM Dependencies & Build Assets
-      run: |
-        npm ci
-        npm run build
+      - name: Install NPM Dependencies & Build Assets
+        run: |
+          npm ci
+          npm run build
 
-    # 3. Initialize SQLite Testing Database
-    - name: Setup Testing Database
-      run: |
-        mkdir -p database
-        touch database/testing.sqlite
-        php artisan migrate:fresh --seed --env=testing
+      - name: Setup Testing Database
+        run: |
+          mkdir -p database
+          touch database/testing.sqlite
+          php artisan migrate:fresh --seed --env=testing
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/testing.sqlite
 
-    # 4. Run Laravel PHPUnit / Feature Tests
-    - name: Run PHP Unit Tests
-      run: php artisan test
-      env:
-        DB_CONNECTION: sqlite
-        DB_DATABASE: database/testing.sqlite
+      - name: Run PHP Unit Tests
+        run: php artisan test
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/testing.sqlite
 
-    # 5. Start Laravel Development Server in Background
-    - name: Start Laravel Server
-      run: php artisan serve --env=testing --port=8000 &
+      - name: Start Laravel Server
+        run: php artisan serve --env=testing --host=127.0.0.1 --port=8000 &
 
-    # 6. Setup Python for UI Tests
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-        cache: 'pip'
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
 
-    - name: Install Python Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install selenium webdriver-manager
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install selenium webdriver-manager
 
-    # 7. Setup Chrome Browser (Headless testing)
-    - name: Setup Chrome
-      uses: browser-actions/setup-chrome@latest
-      with:
-        chrome-version: stable
+      - name: Setup Chrome
+        uses: browser-actions/setup-chrome@latest
+        with:
+          chrome-version: stable
 
-    # 8. Run Python Selenium UI Tests
-    - name: Run UI Tests (Python Selenium)
-      run: |
-        # Wait for the Laravel server to spin up and bind to port 8000
-        sleep 5
-        python tests/ui_test.py
-      env:
-        APP_URL: http://127.0.0.1:8000
+      - name: Run UI Tests Python Selenium
+        run: |
+          sleep 5
+          python tests/ui_test.py
+        env:
+          APP_URL: http://127.0.0.1:8000
